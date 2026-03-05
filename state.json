@@ -655,7 +655,7 @@
     "anomaly:TATN:2026-03-05 13:50": 1772707808,
     "anomaly:VTBR:2026-03-05 13:50": 1772707810
   },
-  "scan_index": 0,
+  "scan_index": 10,
   "daily_signals": [
     {
       "ts_msk": "2026-03-05T09:45:15+03:00",
@@ -937,5 +937,16 @@
       "name": "OZON",
       "ts": 1772702244
     }
+  },
+  "tg_offset": 0,
+  "recent_signals": {},
+  "recent_order": [],
+  "last_summary": {
+    "ts_msk": "2026-03-05T15:03:34+03:00",
+    "rss": 651,
+    "news_sent": 0,
+    "anomaly_scanned": 10,
+    "anomaly_sent": 0,
+    "sent": 0
   }
 }
