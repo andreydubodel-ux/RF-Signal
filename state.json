@@ -1,5 +1,99 @@
 {
-  "seen": {},
+  "seen": {
+    "news:1e8af653d26ad4431c805bf8772fcc26006d6e5d": 1772693115,
+    "news:026193128171b9560003f570167cea8becaa121c": 1772693115,
+    "news:3ae3388bd4536431421fa5215b0078b6d23f7d25": 1772693115,
+    "news:4254f462272a5cf552b283c824198eb32d3c4ee3": 1772693115,
+    "news:55a9672446fe460dd92168fa5159aec66fa3f313": 1772693115,
+    "news:9cc3069b00062eae6219d2db6d2a7887d80fe111": 1772693115,
+    "news:fba4eec6e19ef7bb0d96bfdb0f6a3e36ed145c47": 1772693115,
+    "news:2d7bb45a1f53f31fff860a8f8fe5a32972e0509f": 1772693115,
+    "news:8cd8bca09cabd4827dc238b15c09c95cc33d336f": 1772693115,
+    "news:a1d95c107af1ebe23fe75133c6160f76e964a8b4": 1772693115,
+    "news:2709134d209d09803205a82f9f6fc70fe213bc40": 1772693116,
+    "news:335c6b2be72cf5e4e83db802901d7e1474937e2c": 1772693116,
+    "news:bbc80447898ce133fe64a6a533264d2da36c84a8": 1772693116,
+    "news:704c6fa6cbcfc8839e3e0f2a3be75663a39b82e6": 1772693116,
+    "news:fd4a91dbe336a20ab74422ef3e9e1faae0a0c47e": 1772693116,
+    "news:bdc141314fcde066aed0879a15f6af9df871a78d": 1772693117,
+    "news:c1e1fa3c09af6a2c09578d329cd1c2e16d81c769": 1772693123,
+    "news:28c0017c90124bfc10330fe4882a1047c5cc8199": 1772693123,
+    "news:6c7d714bb78392de632259bcd266d89dbd5df81d": 1772693123,
+    "news:1f511bfca00e83746a576d176d61757b31c4624e": 1772693123
+  },
   "scan_index": 0,
-  "daily_signals": []
+  "daily_signals": [
+    {
+      "ts_msk": "2026-03-05T09:45:15+03:00",
+      "ticker": "MOEX",
+      "type": "news",
+      "action": "buy",
+      "score": 7,
+      "title": "О включении ценных бумаг в Сектор Роста",
+      "url": "https://www.moex.com/n98143"
+    },
+    {
+      "ts_msk": "2026-03-05T09:45:16+03:00",
+      "ticker": "VKCO",
+      "type": "news",
+      "action": "buy",
+      "score": 7,
+      "title": "О включении ценных бумаг в Сектор Роста",
+      "url": "https://www.moex.com/n98143"
+    },
+    {
+      "ts_msk": "2026-03-05T09:45:16+03:00",
+      "ticker": "MOEX",
+      "type": "news",
+      "action": "sell",
+      "score": 7,
+      "title": "О включении ценных бумаг в Cектор компаний повышенного инвестиционного риска",
+      "url": "https://www.moex.com/n98141"
+    },
+    {
+      "ts_msk": "2026-03-05T09:45:16+03:00",
+      "ticker": "VKCO",
+      "type": "news",
+      "action": "sell",
+      "score": 7,
+      "title": "О включении ценных бумаг в Cектор компаний повышенного инвестиционного риска",
+      "url": "https://www.moex.com/n98141"
+    },
+    {
+      "ts_msk": "2026-03-05T09:45:17+03:00",
+      "ticker": "MOEX",
+      "type": "news",
+      "action": "sell",
+      "score": 7,
+      "title": "О внесении изменений в Список ценных бумаг, допущенных к торгам",
+      "url": "https://www.moex.com/n98138"
+    },
+    {
+      "ts_msk": "2026-03-05T09:45:23+03:00",
+      "ticker": "MOEX",
+      "type": "news",
+      "action": "sell",
+      "score": 7,
+      "title": "Об исключении ценных бумаг из Списка ценных бумаг, допущенных к торгам, и о прекращении торгов ценными бумагами",
+      "url": "https://www.moex.com/n98137"
+    },
+    {
+      "ts_msk": "2026-03-05T09:45:23+03:00",
+      "ticker": "MOEX",
+      "type": "news",
+      "action": "sell",
+      "score": 7,
+      "title": "О внесении изменений в Список ценных бумаг, допущенных к торгам",
+      "url": "https://www.moex.com/n98133"
+    },
+    {
+      "ts_msk": "2026-03-05T09:45:24+03:00",
+      "ticker": "VKCO",
+      "type": "news",
+      "action": "sell",
+      "score": 7,
+      "title": "О внесении изменений в Список ценных бумаг, допущенных к торгам",
+      "url": "https://www.moex.com/n98133"
+    }
+  ]
 }
