@@ -662,9 +662,11 @@
     "news:948d0d0103f87bd98d4c7fd00e7f0c45bea546e2": 1772720716,
     "news:50f1fa99cf4ac872d686812bc92bdcecebc8493a": 1772720716,
     "news:545b6d4884046fcdedae496d177f010aaa56d0d0": 1772720716,
-    "news:729bb1e721d0872d41934b2ad289a18875351696": 1772720716
+    "news:729bb1e721d0872d41934b2ad289a18875351696": 1772720716,
+    "news:560234919d43f9e10e6ea96e506050370f1800f4": 1772723437,
+    "news:a324def0a0bb0faaa6e42ba70b61efe2e779b0b4": 1772723437
   },
-  "scan_index": 20,
+  "scan_index": 0,
   "daily_signals": [
     {
       "ts_msk": "2026-03-05T09:45:15+03:00",
@@ -951,8 +953,8 @@
   "recent_signals": {},
   "recent_order": [],
   "last_summary": {
-    "ts_msk": "2026-03-05T17:25:10+03:00",
-    "rss": 660,
+    "ts_msk": "2026-03-05T18:10:28+03:00",
+    "rss": 662,
     "news_sent": 0,
     "anomaly_scanned": 10,
     "anomaly_sent": 0,
