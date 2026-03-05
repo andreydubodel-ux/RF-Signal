@@ -650,9 +650,10 @@
     "news:86bd7c8a6c919f20e0fafc741fb3a94810d8995d": 1772705232,
     "news:9293bf370290d3d50c2cbfcd39ff10bcf3ca4339": 1772705232,
     "news:5ae7146ee34b6a9ed61b929ace545aebb3ea4efe": 1772705232,
-    "news:43cafa154651814e0e3aeb16ecf1c645d0a31272": 1772705232
+    "news:43cafa154651814e0e3aeb16ecf1c645d0a31272": 1772705232,
+    "anomaly:MOEX:2026-03-05 13:10": 1772705424
   },
-  "scan_index": 10,
+  "scan_index": 20,
   "daily_signals": [
     {
       "ts_msk": "2026-03-05T09:45:15+03:00",
@@ -896,6 +897,15 @@
       "score": 7,
       "title": "Обновление тестового полигона Срочного рынка Т2 до версии ТКС Spectra 9.3",
       "url": "https://www.moex.com/n97391"
+    },
+    {
+      "ts_msk": "2026-03-05T13:10:25+03:00",
+      "ticker": "MOEX",
+      "company": "Московская биржа",
+      "type": "anomaly",
+      "score": 8,
+      "title": "Движение вниз -0.7% (активность x18.8)",
+      "url": ""
     }
   ],
   "name_cache": {
