@@ -651,9 +651,11 @@
     "news:9293bf370290d3d50c2cbfcd39ff10bcf3ca4339": 1772705232,
     "news:5ae7146ee34b6a9ed61b929ace545aebb3ea4efe": 1772705232,
     "news:43cafa154651814e0e3aeb16ecf1c645d0a31272": 1772705232,
-    "anomaly:MOEX:2026-03-05 13:10": 1772705424
+    "anomaly:MOEX:2026-03-05 13:10": 1772705424,
+    "anomaly:TATN:2026-03-05 13:50": 1772707808,
+    "anomaly:VTBR:2026-03-05 13:50": 1772707810
   },
-  "scan_index": 20,
+  "scan_index": 0,
   "daily_signals": [
     {
       "ts_msk": "2026-03-05T09:45:15+03:00",
@@ -905,6 +907,24 @@
       "type": "anomaly",
       "score": 8,
       "title": "Движение вниз -0.7% (активность x18.8)",
+      "url": ""
+    },
+    {
+      "ts_msk": "2026-03-05T13:50:08+03:00",
+      "ticker": "TATN",
+      "company": "Татнефть",
+      "type": "anomaly",
+      "score": 7,
+      "title": "Движение вверх +1.0% (активность x4.5)",
+      "url": ""
+    },
+    {
+      "ts_msk": "2026-03-05T13:50:11+03:00",
+      "ticker": "VTBR",
+      "company": "ВТБ",
+      "type": "anomaly",
+      "score": 8,
+      "title": "Движение вверх +0.8% (активность x6.2)",
       "url": ""
     }
   ],
