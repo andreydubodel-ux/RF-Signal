@@ -1,0 +1,28 @@
+name: telegram-diag
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send PING to Telegram
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import os, json, urllib.request, urllib.parse, datetime
+          token = os.environ.get("TG_TOKEN","").strip()
+          chat_id = os.environ.get("TG_CHAT_ID","").strip()
+          text = "🟢 DIAG: GitHub Actions видит Telegram. " + datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+          if not token or not chat_id:
+            raise SystemExit("TG_TOKEN или TG_CHAT_ID пустые в Secrets")
+          url = f"https://api.telegram.org/bot{token}/sendMessage"
+          data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
+          req = urllib.request.Request(url, data=data, method="POST")
+          with urllib.request.urlopen(req, timeout=30) as r:
+            body = r.read().decode("utf-8")
+          print(body)
+          PY
