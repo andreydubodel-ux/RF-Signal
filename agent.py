@@ -97,14 +97,21 @@ def match_tickers(text: str):
 
 def classify(title: str, summary: str):
     s = (title + " " + summary).lower()
+
+    # 1) Технические/служебные новости биржи — это НЕ торговый сигнал
+    if any(k in s for k in TECH_KW):
+        return "tech", "Это служебная (техническая) новость биржи. Обычно не повод для сделки."
+
+    # 2) Остальное — как раньше
     pos = any(k in s for k in POS_KW)
     neg = any(k in s for k in NEG_KW)
+
     if pos and not neg:
-        return "positive", "Новость выглядит позитивной."
+        return "positive", "Новость выглядит позитивной (может поддержать рост)."
     if neg and not pos:
-        return "negative", "Новость выглядит негативной."
+        return "negative", "Новость выглядит негативной (может усилить продажи)."
     if pos and neg:
-        return "mixed", "Новость смешанная: есть и плюсы, и риски."
+        return "mixed", "Новость смешанная: есть плюсы и риски."
     return "unknown", "Эффект новости неочевиден."
 
 def score_news(kind: str):
