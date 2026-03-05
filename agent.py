@@ -12,7 +12,7 @@ import feedparser
 
 
 # =========================
-# Load config / state
+# Config / state
 # =========================
 
 CFG = json.load(open("config.json", "r", encoding="utf-8"))
@@ -26,6 +26,12 @@ state.setdefault("scan_index", 0)
 state.setdefault("daily_signals", [])
 state.setdefault("name_cache", {})
 
+# для “личного бота”
+state.setdefault("tg_offset", 0)          # чтобы не читать одни и те же команды
+state.setdefault("recent_signals", {})    # {id: payload}
+state.setdefault("recent_order", [])      # [id1,id2,...]
+state.setdefault("last_summary", {})      # последний итог run_monitor
+
 WATCHLIST = set(CFG["watchlist"])
 
 MIN_SCORE = int(CFG.get("min_score_to_alert", 7))
@@ -37,33 +43,40 @@ CANDLE_INTERVAL = int(CFG.get("candle_interval_minutes", 10))
 ANOMALY_VALUE_RATIO = float(CFG.get("anomaly_value_ratio", 3.0))
 ANOMALY_CHANGE_PCT = float(CFG.get("anomaly_change_pct", 0.7))
 
-# Главное требование: “закрепление = 2 свечи”
 CONFIRM_CANDLES = int(CFG.get("confirm_candles", 2))
-
-# Буфер вокруг уровней (в процентах)
-RISK_BUFFER_PCT = float(CFG.get("risk_buffer_pct", 0.15))  # 0.15%
+RISK_BUFFER_PCT = float(CFG.get("risk_buffer_pct", 0.15))
 
 TG_TOKEN = os.environ["TG_TOKEN"]
-TG_CHAT_ID = os.environ["TG_CHAT_ID"]
-UA = {"User-Agent": "rf-signal-agent/7.0 (+github actions)"}
+TG_CHAT_ID = os.environ.get("TG_CHAT_ID", "").strip()  # может быть пустым на этапе настройки
+EVENT_NAME = os.getenv("GITHUB_EVENT_NAME", "")
+
+UA = {"User-Agent": "rf-signal-agent/8.0 (+github actions)"}
 
 
 # =========================
 # Telegram
 # =========================
 
-def tg_send(text: str):
+def tg_send(chat_id: int, text: str):
     url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
     limit = 3800
     parts = [text[i:i + limit] for i in range(0, len(text), limit)]
     for part in parts:
-        r = requests.post(url, json={"chat_id": TG_CHAT_ID, "text": part}, timeout=30)
+        r = requests.post(url, json={"chat_id": chat_id, "text": part}, timeout=30)
         r.raise_for_status()
+
+def tg_send_to_owner(text: str):
+    if not TG_CHAT_ID:
+        return
+    tg_send(int(TG_CHAT_ID), text)
 
 
 # =========================
 # State helpers
 # =========================
+
+def save_state():
+    json.dump(state, open(STATE_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 def seen(key: str) -> bool:
     return key in state["seen"]
@@ -75,6 +88,14 @@ def mark_seen(key: str):
         for k, _ in items[:1500]:
             state["seen"].pop(k, None)
 
+def add_recent_signal(sig_id: str, payload: dict):
+    state["recent_signals"][sig_id] = payload
+    state["recent_order"].append(sig_id)
+    # держим последние 50
+    while len(state["recent_order"]) > 50:
+        old = state["recent_order"].pop(0)
+        state["recent_signals"].pop(old, None)
+
 def add_daily_signal(entry: dict):
     state["daily_signals"].append(entry)
     cutoff = datetime.now(MSK).date() - timedelta(days=7)
@@ -82,9 +103,6 @@ def add_daily_signal(entry: dict):
         e for e in state["daily_signals"]
         if datetime.fromisoformat(e["ts_msk"]).date() >= cutoff
     ]
-
-def save_state():
-    json.dump(state, open(STATE_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 
 # =========================
@@ -161,7 +179,7 @@ def header_for(ticker: str) -> str:
 
 
 # =========================
-# RSS (MOEX)
+# RSS
 # =========================
 
 def fetch_moex_rss_all_news():
@@ -184,7 +202,7 @@ def stable_key_from_news(title: str, link: str, published: str):
 
 
 # =========================
-# Extract explicit tickers only (защита от ВК/включит и T/T2)
+# Explicit ticker extraction only
 # =========================
 
 PAREN_TICKER = re.compile(r"\(\s*([A-Z0-9]{1,10})\s*\)")
@@ -200,7 +218,6 @@ def extract_explicit_tickers(text: str):
     for m in TICKER_WORD.finditer(t):
         found.add(m.group(1).strip().upper())
 
-    # тикер T допускаем только как (T)
     if "T" in found:
         if "(T)" not in t.replace(" ", ""):
             found.discard("T")
@@ -211,7 +228,7 @@ def extract_explicit_tickers(text: str):
 
 
 # =========================
-# Classification (режем служебку)
+# Classification
 # =========================
 
 POS_KW = ["дивиденд", "рекомендац", "выкуп", "байбек", "отчет", "результат", "прибыл", "рост", "прогноз повыш"]
@@ -253,7 +270,7 @@ def score_news(kind: str) -> int:
 
 
 # =========================
-# Market data (candles)
+# Market data
 # =========================
 
 def fetch_candles(ticker: str, interval_minutes: int, lookback_days: int = 2):
@@ -290,11 +307,6 @@ def floor_time_bucket(dt: datetime, minutes: int) -> str:
     return dt.replace(minute=m, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M")
 
 def market_snapshot(ticker: str):
-    """
-    Возвращает уровни + подтверждение.
-    base = close ~40 минут назад (4 свечи по 10м + текущая)
-    confirm = последние CONFIRM_CANDLES закрылись выше/ниже base
-    """
     try:
         candles = fetch_candles(ticker, CANDLE_INTERVAL, lookback_days=2)
     except Exception:
@@ -313,13 +325,12 @@ def market_snapshot(ticker: str):
 
     change_pct = (price_now - base) / base * 100.0
 
-    recent = candles[-6:]  # ~50-60 минут
+    recent = candles[-6:]
     highs = [float(c.get("high") or 0) for c in recent if float(c.get("high") or 0) > 0]
     lows = [float(c.get("low") or 0) for c in recent if float(c.get("low") or 0) > 0]
     high_recent = max(highs) if highs else price_now
     low_recent = min(lows) if lows else price_now
 
-    # активность
     values = []
     for c in candles[-25:-2]:
         v = float(c.get("value") or 0)
@@ -332,7 +343,6 @@ def market_snapshot(ticker: str):
         if median > 0:
             ratio = float(last.get("value") or 0) / median
 
-    # подтверждение 2 свечи
     n = max(1, CONFIRM_CANDLES)
     last_closes = [float(c.get("close") or 0) for c in candles[-n:]]
     confirm_up = all(c > base for c in last_closes if c > 0)
@@ -379,10 +389,80 @@ def anomaly_score_from_snapshot(snap: dict):
 
 
 # =========================
-# Message builders (максимально простой формат)
+# Signal IDs / Explain
 # =========================
 
-def build_anomaly_message(ticker: str, snap: dict, score: int):
+def make_id(prefix: str, ticker: str, title: str) -> str:
+    raw = f"{prefix}|{ticker}|{title}|{datetime.now(MSK).isoformat(timespec='minutes')}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:6].upper()
+
+def explain_signal(sig: dict) -> str:
+    # максимально простое “почему” и “что делать”
+    kind = sig.get("kind")
+    ticker = sig.get("ticker")
+    company = sig.get("company")
+    ts = sig.get("ts_msk")
+    snap = sig.get("snap") or {}
+    base = snap.get("base")
+    price_now = snap.get("price_now")
+    ch = snap.get("change_pct")
+    ratio = snap.get("ratio")
+    ratio_txt = f"x{ratio:.1f}" if isinstance(ratio, (int, float)) else "—"
+
+    lines = []
+    lines.append(f"📘 Объяснение по {company} ({ticker})")
+    lines.append(f"Время (MSK): {ts}")
+    lines.append("")
+    if kind == "anomaly":
+        lines.append("Что это было:")
+        lines.append(f"- Цена сдвинулась {ch:+.1f}% за ~40 минут")
+        lines.append(f"- Активность выросла до {ratio_txt} от обычной")
+        lines.append("")
+        lines.append("Что это обычно значит (простыми словами):")
+        lines.append("- На рынке появился крупный покупатель/продавец или новость уже “разгоняет” движение.")
+        lines.append("- Это НЕ команда купить/продать. Это повод открыть график и действовать по правилам.")
+    else:
+        lines.append("Что это было:")
+        lines.append(f"- Новость: {sig.get('title')}")
+        lines.append("- Смысл: агент оценил как событие, которое может сдвинуть цену (но подтверждаем ценой).")
+
+    lines.append("")
+    lines.append("Главное правило (чтобы не входить на шуме):")
+    lines.append(f"- Подтверждение = {CONFIRM_CANDLES} свечи по {CANDLE_INTERVAL} минут закрылись по одну сторону от уровня старта.")
+
+    if base and price_now:
+        direction, entry, stop = build_levels(snap)
+        lines.append("")
+        lines.append("Уровни:")
+        lines.append(f"- Сейчас: {fmt_price(price_now)} ₽")
+        lines.append(f"- Старт импульса: {fmt_price(base)} ₽")
+        lines.append(f"- Триггер: {fmt_price(entry)} ₽")
+        lines.append(f"- Стоп: {fmt_price(stop)} ₽")
+
+        lines.append("")
+        lines.append("Как действовать:")
+        if direction == "UP":
+            lines.append(f"- Если НЕ в позиции: жди подтверждения и вход по триггеру {fmt_price(entry)} ₽.")
+            lines.append(f"- Если В позиции: держи, но выход если {CONFIRM_CANDLES} свечи закрылись ниже {fmt_price(base)} ₽.")
+            lines.append(f"- Шорт: только если цена вернулась ниже {fmt_price(base)} ₽ и там закрепилась.")
+        else:
+            lines.append(f"- Если НЕ в позиции: не покупай “в падение”. Жди возврата выше {fmt_price(base)} ₽.")
+            lines.append(f"- Если В позиции: защити/сократи при уходе ниже {fmt_price(entry)} ₽.")
+            lines.append(f"- Если шорт доступен: вход ниже {fmt_price(entry)} ₽, стоп выше {fmt_price(stop)} ₽.")
+
+    lines.append("")
+    lines.append("Когда это НЕ работает:")
+    lines.append("- Цена быстро вернулась к уровню “до” и там удержалась.")
+    lines.append("- Объём всплеснул на 1 свече и сразу пропал (ложный вынос).")
+
+    return "\n".join(lines)
+
+
+# =========================
+# Message builders (простые и исполняемые)
+# =========================
+
+def build_anomaly_message(sig_id: str, ticker: str, snap: dict, score: int):
     now = datetime.now(MSK).strftime("%Y-%m-%d %H:%M")
     ratio = snap.get("ratio")
     ratio_txt = f"x{ratio:.1f}" if ratio is not None else "—"
@@ -393,53 +473,47 @@ def build_anomaly_message(ticker: str, snap: dict, score: int):
     base = snap["base"]
     ch = snap["change_pct"]
 
-    # подтверждение
     if direction == "UP":
         confirmed = "ДА" if snap["confirm_up"] else "НЕТ"
+        action_not_in = f"НЕ в позиции: жди подтверждения → вход по {fmt_price(entry)} ₽"
+        action_in = f"В позиции: держи; выход если {CONFIRM_CANDLES} свечи ниже {fmt_price(base)} ₽"
+        extra = f"Шорт: только если вернулись ниже {fmt_price(base)} ₽."
     else:
         confirmed = "ДА" if snap["confirm_down"] else "НЕТ"
-
-    confirm_text = f"Подтверждение: {confirmed} (2 свечи {CANDLE_INTERVAL}м закрылись {'выше' if direction=='UP' else 'ниже'} {fmt_price(base)} ₽)"
-
-    if direction == "UP":
-        action_not_in = f"Если НЕ в позиции: жди подтверждения и вход по {fmt_price(entry)} ₽"
-        action_in = f"Если В позиции: держи, но выход если 2 свечи закрылись ниже {fmt_price(base)} ₽"
-        short_line = f"Шорт: обычно не нужен. Только если цена вернулась ниже {fmt_price(base)} ₽."
-    else:
-        action_not_in = f"Если НЕ в позиции: НЕ покупай. Жди возврата выше {fmt_price(base)} ₽"
-        action_in = f"Если В позиции: сократи/защити при уходе ниже {fmt_price(entry)} ₽"
-        short_line = f"Шорт (если доступен): вход ниже {fmt_price(entry)} ₽, стоп выше {fmt_price(stop)} ₽"
+        action_not_in = f"НЕ в позиции: не покупай; жди возврата выше {fmt_price(base)} ₽"
+        action_in = f"В позиции: сократи/защити при уходе ниже {fmt_price(entry)} ₽"
+        extra = f"Шорт (если доступен): вход < {fmt_price(entry)} ₽, стоп > {fmt_price(stop)} ₽"
 
     return (
-        f"⚡ {header_for(ticker)} • {score}/10\n"
+        f"⚡ {header_for(ticker)} • {score}/10 • ID {sig_id}\n"
         f"Время (MSK): {now}\n\n"
         f"Что сейчас:\n"
-        f"- Импульс {('вверх' if ch>0 else 'вниз')} {ch:+.1f}% за ~40 мин\n"
+        f"- Импульс {('вверх' if ch>0 else 'вниз')} {ch:+.1f}%\n"
         f"- Активность: {ratio_txt}\n\n"
         f"Уровни:\n"
-        f"- Сейчас: {fmt_price(price_now)} ₽\n"
-        f"- Старт: {fmt_price(base)} ₽\n"
-        f"- Триггер: {fmt_price(entry)} ₽\n"
-        f"- Стоп: {fmt_price(stop)} ₽\n\n"
-        f"{confirm_text}\n\n"
+        f"- Сейчас {fmt_price(price_now)} ₽ | Старт {fmt_price(base)} ₽\n"
+        f"- Триггер {fmt_price(entry)} ₽ | Стоп {fmt_price(stop)} ₽\n\n"
+        f"Подтверждение: {confirmed} ({CONFIRM_CANDLES} свечи {CANDLE_INTERVAL}м)\n\n"
         f"Действия:\n"
         f"- {action_not_in}\n"
         f"- {action_in}\n"
-        f"- {short_line}"
+        f"- {extra}\n\n"
+        f"Если непонятно: /explain {sig_id}"
     )
 
-def build_news_message(ticker: str, title: str, url: str, kind: str, why_line: str, score: int):
+def build_news_message(sig_id: str, ticker: str, title: str, url: str, kind: str, why_line: str, score: int):
     now = datetime.now(MSK).strftime("%Y-%m-%d %H:%M")
     snap = market_snapshot(ticker)
 
     if not snap:
         return (
-            f"📰 {header_for(ticker)} • {score}/10\n"
+            f"📰 {header_for(ticker)} • {score}/10 • ID {sig_id}\n"
             f"Время (MSK): {now}\n\n"
             f"Новость: {title}\n"
             f"Смысл: {why_line}\n\n"
-            f"Действие: открой график и жди 2 свечи подтверждения движения.\n"
-            f"Источник: {url}"
+            f"Действие: открой график и жди подтверждения (2 свечи 10м).\n"
+            f"Источник: {url}\n\n"
+            f"/explain {sig_id}"
         )
 
     direction, entry, stop = build_levels(snap)
@@ -450,54 +524,52 @@ def build_news_message(ticker: str, title: str, url: str, kind: str, why_line: s
 
     if direction == "UP":
         confirmed = "ДА" if snap["confirm_up"] else "НЕТ"
+        actions = (
+            f"- НЕ в позиции: подтверждение → вход по {fmt_price(entry)} ₽\n"
+            f"- В позиции: держи; выход если {CONFIRM_CANDLES} свечи ниже {fmt_price(base)} ₽"
+        )
     else:
         confirmed = "ДА" if snap["confirm_down"] else "НЕТ"
-
-    confirm_text = f"Подтверждение: {confirmed} (2 свечи {CANDLE_INTERVAL}м закрылись {'выше' if direction=='UP' else 'ниже'} {fmt_price(base)} ₽)"
-
-    # максимально простое “что делать”
-    if kind == "positive":
-        headline = "Суть: позитив → покупка только после подтверждения"
-    elif kind == "negative":
-        headline = "Суть: негатив → защита/шорт только после подтверждения"
-    else:
-        headline = "Суть: эффект неясен → лучше ждать"
-
-    if direction == "UP":
         actions = (
-            f"- Если НЕ в позиции: вход по {fmt_price(entry)} ₽ после подтверждения\n"
-            f"- Если В позиции: держи, но выход если 2 свечи закрылись ниже {fmt_price(base)} ₽"
+            f"- НЕ в позиции: не покупай; жди возврата выше {fmt_price(base)} ₽\n"
+            f"- В позиции: сократи/защити при уходе ниже {fmt_price(entry)} ₽\n"
+            f"- Шорт (если доступен): вход < {fmt_price(entry)} ₽, стоп > {fmt_price(stop)} ₽"
         )
-    else:
-        actions = (
-            f"- Если НЕ в позиции: не покупай. Жди возврата выше {fmt_price(base)} ₽\n"
-            f"- Если В позиции: защити/сократи при уходе ниже {fmt_price(entry)} ₽\n"
-            f"- Шорт (если доступен): вход ниже {fmt_price(entry)} ₽, стоп выше {fmt_price(stop)} ₽"
-        )
+
+    headline = "Суть: позитив" if kind == "positive" else ("Суть: негатив" if kind == "negative" else "Суть: эффект неясен")
 
     return (
-        f"📰 {header_for(ticker)} • {score}/10\n"
+        f"📰 {header_for(ticker)} • {score}/10 • ID {sig_id}\n"
         f"Время (MSK): {now}\n\n"
         f"{headline}\n"
         f"Новость: {title}\n"
-        f"Рынок: {ch:+.1f}% за ~40 мин, активность {ratio_txt}\n"
-        f"{confirm_text}\n\n"
+        f"Рынок: {ch:+.1f}% и активность {ratio_txt}\n"
+        f"Подтверждение: {confirmed} ({CONFIRM_CANDLES} свечи {CANDLE_INTERVAL}м)\n\n"
         f"Уровни: старт {fmt_price(base)} ₽ | триггер {fmt_price(entry)} ₽ | стоп {fmt_price(stop)} ₽\n\n"
         f"Действия:\n{actions}\n\n"
-        f"Источник: {url}"
+        f"Источник: {url}\n\n"
+        f"/explain {sig_id}"
     )
 
 
 # =========================
-# Runs
+# Monitor
 # =========================
 
-def run_monitor():
+def run_monitor(manual: bool = False):
+    dbg = {
+        "rss": 0,
+        "news_sent": 0,
+        "anomaly_scanned": 0,
+        "anomaly_sent": 0
+    }
     sent = 0
     sent_tickers = set()
 
-    # 1) News (только явные тикеры)
+    # 1) News
     rss_entries = fetch_moex_rss_all_news()
+    dbg["rss"] = len(rss_entries)
+
     for e in rss_entries:
         title = (e.get("title") or "").strip()
         summary = (e.get("summary") or "").strip()
@@ -525,7 +597,22 @@ def run_monitor():
             if t in sent_tickers:
                 continue
 
-            tg_send(build_news_message(t, title, link, kind, why_line, score))
+            sig_id = make_id("NEWS", t, title)
+            msg = build_news_message(sig_id, t, title, link, kind, why_line, score)
+            tg_send_to_owner(msg)
+
+            snap = market_snapshot(t)
+            add_recent_signal(sig_id, {
+                "id": sig_id,
+                "kind": "news",
+                "ticker": t,
+                "company": get_company_name(t),
+                "ts_msk": datetime.now(MSK).isoformat(timespec="seconds"),
+                "title": title,
+                "url": link,
+                "snap": snap,
+                "score": score
+            })
 
             add_daily_signal({
                 "ts_msk": datetime.now(MSK).isoformat(timespec="seconds"),
@@ -539,11 +626,13 @@ def run_monitor():
 
             sent_tickers.add(t)
             sent += 1
+            dbg["news_sent"] += 1
             if sent >= MAX_ALERTS:
+                state["last_summary"] = {"ts_msk": datetime.now(MSK).isoformat(timespec="seconds"), **dbg, "sent": sent}
                 save_state()
-                return
+                return sent, dbg
 
-    # 2) Anomaly scan
+    # 2) Anomalies
     wl = sorted(list(WATCHLIST))
     n = len(wl)
     start = int(state.get("scan_index", 0)) % max(1, n)
@@ -551,6 +640,8 @@ def run_monitor():
     state["scan_index"] = (start + SCAN_PER_RUN) % max(1, n)
 
     for t in chunk:
+        dbg["anomaly_scanned"] += 1
+
         bucket = floor_time_bucket(datetime.now(MSK), CANDLE_INTERVAL)
         key = f"anomaly:{t}:{bucket}"
         if seen(key):
@@ -565,7 +656,21 @@ def run_monitor():
             continue
 
         mark_seen(key)
-        tg_send(build_anomaly_message(t, snap, score))
+        sig_id = make_id("ANOM", t, f"{snap['change_pct']:+.1f}")
+        msg = build_anomaly_message(sig_id, t, snap, score)
+        tg_send_to_owner(msg)
+
+        add_recent_signal(sig_id, {
+            "id": sig_id,
+            "kind": "anomaly",
+            "ticker": t,
+            "company": get_company_name(t),
+            "ts_msk": datetime.now(MSK).isoformat(timespec="seconds"),
+            "title": f"Импульс {snap['change_pct']:+.1f}% (x{snap['ratio']:.1f})",
+            "url": "",
+            "snap": snap,
+            "score": score
+        })
 
         add_daily_signal({
             "ts_msk": datetime.now(MSK).isoformat(timespec="seconds"),
@@ -573,47 +678,162 @@ def run_monitor():
             "company": get_company_name(t),
             "type": "anomaly",
             "score": score,
-            "title": f"Импульс {snap['change_pct']:+.1f}% (активность x{snap['ratio']:.1f})",
+            "title": f"Импульс {snap['change_pct']:+.1f}% (x{snap['ratio']:.1f})",
             "url": ""
         })
 
         sent += 1
+        dbg["anomaly_sent"] += 1
         if sent >= MAX_ALERTS:
             break
 
+    state["last_summary"] = {"ts_msk": datetime.now(MSK).isoformat(timespec="seconds"), **dbg, "sent": sent}
     save_state()
+    return sent, dbg
 
-def run_digest():
-    today = datetime.now(MSK).date()
-    items = [e for e in state["daily_signals"] if datetime.fromisoformat(e["ts_msk"]).date() == today]
 
-    now = datetime.now(MSK).strftime("%Y-%m-%d %H:%M")
-    if not items:
-        tg_send(f"📌 Дайджест (MSK) {now}\nСегодня сигналов не было.")
-        save_state()
+# =========================
+# Bot listener (commands)
+# =========================
+
+def tg_get_updates(offset: int):
+    url = f"https://api.telegram.org/bot{TG_TOKEN}/getUpdates"
+    params = {
+        "offset": offset,
+        "timeout": 20,
+        "allowed_updates": ["message"]
+    }
+    r = requests.get(url, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+def help_text():
+    return (
+        "Команды:\n"
+        "/run — запустить мониторинг вручную\n"
+        "/status — статус последнего запуска\n"
+        "/last — последние сигналы (ID)\n"
+        "/explain — объяснить последний сигнал\n"
+        "/explain ABC123 — объяснить сигнал по ID\n"
+        "/whoami — показать твой chat_id\n\n"
+        "Важно: это не автоторговля. Это подсказки по рынку, решение — на тебе."
+    )
+
+def status_text():
+    s = state.get("last_summary") or {}
+    if not s:
+        return "Статус: ещё не было запусков."
+    return (
+        "Статус последнего запуска:\n"
+        f"- Время (MSK): {s.get('ts_msk','—')}\n"
+        f"- Отправлено: {s.get('sent',0)}\n"
+        f"- RSS новостей: {s.get('rss',0)} | news_sent: {s.get('news_sent',0)}\n"
+        f"- Аномалии: проверено {s.get('anomaly_scanned',0)} | отправлено {s.get('anomaly_sent',0)}"
+    )
+
+def last_text():
+    order = state.get("recent_order", [])
+    if not order:
+        return "Пока нет сохранённых сигналов."
+    last_ids = order[-8:][::-1]
+    lines = ["Последние сигналы:"]
+    for sid in last_ids:
+        sig = state["recent_signals"].get(sid, {})
+        lines.append(f"- {sid} | {sig.get('company','')} ({sig.get('ticker','')}) | {sig.get('kind','')}")
+    lines.append("\n/explain <ID> — чтобы разобрать любой из них.")
+    return "\n".join(lines)
+
+def run_listen_once():
+    # один цикл: прочитать апдейты -> обработать команды -> сохранить offset
+    data = tg_get_updates(int(state.get("tg_offset", 0)))
+    if not data.get("ok"):
         return
 
-    items_sorted = sorted(items, key=lambda x: (x["score"], x["ts_msk"]), reverse=True)
-    top = items_sorted[:12]
+    updates = data.get("result", []) or []
+    if not updates:
+        return
 
-    lines = [f"📌 Дайджест (MSK) {now}", f"Сигналов за день: {len(items)}", ""]
-    for e in top:
-        ts = datetime.fromisoformat(e["ts_msk"]).strftime("%H:%M")
-        header = f"{e.get('company', e['ticker'])} ({e['ticker']})"
-        url = f" | {e['url']}" if e.get("url") else ""
-        lines.append(f"- {ts} {header} — {e['type']} ({e['score']}/10): {e['title']}{url}")
+    max_update_id = None
+    do_run = False
 
-    tg_send("\n".join(lines))
-    save_state()
+    for upd in updates:
+        max_update_id = max(max_update_id or upd["update_id"], upd["update_id"])
+        msg = upd.get("message") or {}
+        chat = msg.get("chat") or {}
+        chat_id = chat.get("id")
+        text = (msg.get("text") or "").strip()
+
+        if not chat_id or not text:
+            continue
+
+        # /whoami можно из любого чата (чтобы настроить TG_CHAT_ID)
+        if text.lower().startswith("/whoami"):
+            tg_send(chat_id, f"Твой chat_id: {chat_id}\nЕсли хочешь личную работу — поставь это число в секрет TG_CHAT_ID.")
+            continue
+
+        # остальное — только владельцу
+        if TG_CHAT_ID and int(chat_id) != int(TG_CHAT_ID):
+            continue
+
+        cmd = text.split()[0].lower()
+
+        if cmd in ("/start", "/help"):
+            tg_send(chat_id, help_text())
+
+        elif cmd == "/status":
+            tg_send(chat_id, status_text())
+
+        elif cmd == "/last":
+            tg_send(chat_id, last_text())
+
+        elif cmd == "/run":
+            do_run = True
+            tg_send(chat_id, "Ок. Запускаю мониторинг. Пришлю результат.")
+
+        elif cmd == "/explain":
+            parts = text.split()
+            if len(parts) >= 2:
+                sid = parts[1].strip().upper()
+            else:
+                order = state.get("recent_order", [])
+                sid = order[-1] if order else ""
+            sig = state.get("recent_signals", {}).get(sid)
+            if not sig:
+                tg_send(chat_id, "Не нашёл сигнал. Используй /last чтобы посмотреть ID.")
+            else:
+                tg_send(chat_id, explain_signal(sig))
+
+        else:
+            tg_send(chat_id, "Не понял команду. Напиши /help")
+
+    # обновляем offset
+    if max_update_id is not None:
+        state["tg_offset"] = int(max_update_id) + 1
+        save_state()
+
+    if do_run:
+        sent, dbg = run_monitor(manual=True)
+        if sent == 0:
+            tg_send_to_owner(
+                "ℹ️ Мониторинг выполнен — сигналов не найдено.\n"
+                f"Новости RSS: {dbg.get('rss',0)}, отправлено новостей: {dbg.get('news_sent',0)}\n"
+                f"Аномалии: проверено {dbg.get('anomaly_scanned',0)}, отправлено: {dbg.get('anomaly_sent',0)}"
+            )
+
+
+# =========================
+# Main
+# =========================
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--digest", action="store_true")
+    ap.add_argument("--listen", action="store_true")
     args = ap.parse_args()
-    if args.digest:
-        run_digest()
+
+    if args.listen:
+        run_listen_once()
     else:
-        run_monitor()
+        run_monitor(manual=False)
 
 if __name__ == "__main__":
     main()
