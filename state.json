@@ -655,7 +655,7 @@
     "anomaly:TATN:2026-03-05 13:50": 1772707808,
     "anomaly:VTBR:2026-03-05 13:50": 1772707810
   },
-  "scan_index": 20,
+  "scan_index": 0,
   "daily_signals": [
     {
       "ts_msk": "2026-03-05T09:45:15+03:00",
