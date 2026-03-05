@@ -1,0 +1,16 @@
+{
+  "timezone": "Europe/Moscow",
+  "min_score_to_alert": 7,
+  "max_alerts_per_run": 8,
+
+  "scan_per_run": 10,
+  "candle_interval_minutes": 10,
+  "anomaly_value_ratio": 3.0,
+  "anomaly_change_pct": 0.7,
+
+  "watchlist": [
+    "SBER","SBERP","GAZP","LKOH","ROSN","NVTK","GMKN","PLZL","CHMF","NLMK",
+    "MGNT","MTSS","MOEX","YDEX","T","VTBR","AFKS","SNGS","SNGSP","TATN",
+    "TATNP","RUAL","ALRS","HYDR","IRAO","FLOT","TRNFP","OZON","VKCO","POSI"
+  ]
+}
