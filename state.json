@@ -653,9 +653,18 @@
     "news:43cafa154651814e0e3aeb16ecf1c645d0a31272": 1772705232,
     "anomaly:MOEX:2026-03-05 13:10": 1772705424,
     "anomaly:TATN:2026-03-05 13:50": 1772707808,
-    "anomaly:VTBR:2026-03-05 13:50": 1772707810
+    "anomaly:VTBR:2026-03-05 13:50": 1772707810,
+    "news:0b6f7a384138430d05e68a16edbb6c06ec581d58": 1772720716,
+    "news:2fd750a793f55d212cc5284e94e04bbca2747471": 1772720716,
+    "news:8cab36e633695ef2a84b6ee9bc7bbdee6e54b614": 1772720716,
+    "news:e10cb3626fb68ac8d981a439e04bcfc9d7d2e58e": 1772720716,
+    "news:ee682f4f2a44e9c625a80425c30304c504ca5876": 1772720716,
+    "news:948d0d0103f87bd98d4c7fd00e7f0c45bea546e2": 1772720716,
+    "news:50f1fa99cf4ac872d686812bc92bdcecebc8493a": 1772720716,
+    "news:545b6d4884046fcdedae496d177f010aaa56d0d0": 1772720716,
+    "news:729bb1e721d0872d41934b2ad289a18875351696": 1772720716
   },
-  "scan_index": 10,
+  "scan_index": 20,
   "daily_signals": [
     {
       "ts_msk": "2026-03-05T09:45:15+03:00",
@@ -938,12 +947,12 @@
       "ts": 1772702244
     }
   },
-  "tg_offset": 0,
+  "tg_offset": 231780862,
   "recent_signals": {},
   "recent_order": [],
   "last_summary": {
-    "ts_msk": "2026-03-05T15:03:34+03:00",
-    "rss": 651,
+    "ts_msk": "2026-03-05T17:25:10+03:00",
+    "rss": 660,
     "news_sent": 0,
     "anomaly_scanned": 10,
     "anomaly_sent": 0,
